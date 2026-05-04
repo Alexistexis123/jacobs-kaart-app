@@ -77,7 +77,7 @@ body { font-family: Arial, sans-serif; }
 <body>
 
 <div id="search-bar">
-  <input id="search-input" type="text" placeholder="&#128269; Zoek postcode..." maxlength="4" autocomplete="off">
+  <input id="search-input" type="text" placeholder="&#128269; Postcode of prefix (bijv. 68)..." maxlength="4" autocomplete="off">
   <button id="search-btn" onclick="doSearch()">&#10132;</button>
 </div>
 <div id="search-results"></div>
@@ -385,9 +385,17 @@ function updateClientCount(clientId){
 const si=document.getElementById('search-input'),sr=document.getElementById('search-results');
 si.addEventListener('input',()=>{
   const q=si.value.trim();if(q.length<2){sr.style.display='none';return;}
-  const m=Object.keys(CENTROIDS).filter(pc=>pc.startsWith(q)).slice(0,6);
+  const all=Object.keys(CENTROIDS).filter(pc=>pc.startsWith(q));
+  const m=all.slice(0,6);
   if(!m.length){sr.style.display='none';return;}
   sr.innerHTML='';
+  if(q.length<4&&all.length>1){
+    const bulk=document.createElement('div');bulk.className='search-result-item';
+    bulk.style.cssText='background:#f0f6ff;font-weight:700;color:#0072B2;';
+    bulk.innerHTML='<span style="font-size:13px;">&#9632; Selecteer alle '+all.length+' postcodes ('+q+'xx)</span>';
+    bulk.onclick=()=>{doSearch();sr.style.display='none';};
+    sr.appendChild(bulk);
+  }
   m.forEach(pc=>{
     const cid=pc4Assignments[pc];const client=cid?clients.find(c=>c.id===cid):null;
     const item=document.createElement('div');item.className='search-result-item';
@@ -401,9 +409,23 @@ si.addEventListener('keydown',e=>{if(e.key==='Enter')doSearch();if(e.key==='Esca
 document.addEventListener('click',e=>{if(!e.target.closest('#search-bar')&&!e.target.closest('#search-results'))sr.style.display='none';});
 
 function doSearch(){
-  const q=si.value.trim().padStart(4,'0');sr.style.display='none';
-  if(CENTROIDS[q])jumpToPC4(q);
-  else{const m=Object.keys(CENTROIDS).find(pc=>pc.startsWith(si.value.trim()));if(m)jumpToPC4(m);else alert('Niet gevonden: '+si.value.trim());}
+  const q=si.value.trim();sr.style.display='none';
+  if(q.length===4&&CENTROIDS[q]){jumpToPC4(q);return;}
+  const matches=Object.keys(CENTROIDS).filter(pc=>pc.startsWith(q));
+  if(!matches.length){alert('Geen postcodes gevonden voor: '+q);return;}
+  if(q.length<4){
+    if(!activeClient){alert('Selecteer eerst een klant om postcodes toe te wijzen.');return;}
+    matches.forEach(pc=>{
+      pc4Assignments[pc]=activeClient.id;
+      const layer=pc4Layers[pc];
+      if(layer)layer.setStyle({fillColor:activeClient.color,fillOpacity:0.65,color:'#333',weight:1.0});
+    });
+    renderClients();scheduleSave();
+    const msg=matches.length+' postcodes ('+q+'xx) toegewezen aan '+activeClient.name;
+    setSaveStatus('saved',msg);
+    return;
+  }
+  jumpToPC4(matches[0]);
 }
 
 function jumpToPC4(pc){
